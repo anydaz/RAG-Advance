@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import ThemeToggle from "../../components/ThemeToggle.jsx";
 
+// ── Dummy data ────────────────────────────────────────────────────────────────
+
 const CHAT_DATA = {
   roadmap: {
     q: "Summarize our Q3 product roadmap",
@@ -50,11 +52,35 @@ const GENERIC = {
   ],
 };
 
+const INITIAL_DOCS = [
+  { id: 1, name: "Employee Handbook 2026.pdf", ext: "PDF", size: "2.4 MB", date: "May 12, 2026", status: "Indexed" },
+  { id: 2, name: "Q3 Roadmap Brief.docx", ext: "DOCX", size: "480 KB", date: "May 28, 2026", status: "Indexed" },
+  { id: 3, name: "Benefits Summary (US).pdf", ext: "PDF", size: "1.1 MB", date: "Apr 30, 2026", status: "Indexed" },
+  { id: 4, name: "Brand Guidelines v3.pdf", ext: "PDF", size: "8.7 MB", date: "May 03, 2026", status: "Indexed" },
+  { id: 5, name: "IT Access Runbook.md", ext: "MD", size: "42 KB", date: "Jun 10, 2026", status: "Indexed" },
+  { id: 6, name: "Security Policy Overview.pdf", ext: "PDF", size: "720 KB", date: "Jun 18, 2026", status: "Indexed" },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function getInitials(username) {
   const parts = username.replace(/[_.\-]/g, " ").split(" ").filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return username.slice(0, 2).toUpperCase();
 }
+
+function humanSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function formatDate(d) {
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2,"0")}, ${d.getFullYear()}`;
+}
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
 
 const PlusIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -62,10 +88,22 @@ const PlusIcon = () => (
   </svg>
 );
 
+const ShieldIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
 const FileIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-ink-faint">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
     <path d="M14 2v6h6" />
+  </svg>
+);
+
+const UploadIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
   </svg>
 );
 
@@ -81,7 +119,31 @@ const UpArrowIcon = () => (
   </svg>
 );
 
+// ── Status badge ──────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }) {
+  const indexed = status === "Indexed";
+  return (
+    <span
+      className="inline-flex items-center gap-[7px] px-[10px] py-1 rounded-full text-[12px] font-semibold"
+      style={{
+        color: indexed ? "var(--accent-text)" : "#c08a2e",
+        background: indexed ? "var(--accent-soft)" : "rgba(192,138,46,0.12)",
+      }}
+    >
+      <span
+        className="w-[6px] h-[6px] rounded-full shrink-0"
+        style={{ background: indexed ? "var(--accent-text)" : "#c08a2e" }}
+      />
+      {status}
+    </span>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
+  // Chat state
   const [isConversation, setIsConversation] = useState(false);
   const [userQuestion, setUserQuestion] = useState("");
   const [assistantFull, setAssistantFull] = useState("");
@@ -90,13 +152,24 @@ export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
   const [streamingDone, setStreamingDone] = useState(false);
   const [sources, setSources] = useState([]);
   const [composer, setComposer] = useState("");
+
+  // Navigation
+  const [view, setView] = useState("chat");
+
+  // Admin state
+  const [documents, setDocuments] = useState(INITIAL_DOCS);
+  const [nextId, setNextId] = useState(INITIAL_DOCS.length + 1);
+
   const intervalRef = useRef(null);
   const textareaRef = useRef(null);
 
   useEffect(() => () => clearInterval(intervalRef.current), []);
 
+  // ── Chat actions ──────────────────────────────────────────────────────────
+
   function ask(question, answer, answerSources) {
     clearInterval(intervalRef.current);
+    setView("chat");
     setIsConversation(true);
     setUserQuestion(question);
     setAssistantFull(answer);
@@ -123,6 +196,7 @@ export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
 
   function newChat() {
     clearInterval(intervalRef.current);
+    setView("chat");
     setIsConversation(false);
     setUserQuestion("");
     setAssistantFull("");
@@ -157,17 +231,44 @@ export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
     el.style.height = Math.min(el.scrollHeight, 140) + "px";
   }
 
+  // ── Admin actions ─────────────────────────────────────────────────────────
+
+  function handleUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const now = new Date();
+    const dateStr = formatDate(now);
+    let id = nextId;
+
+    const newDocs = files.map((f) => {
+      const dot = f.name.lastIndexOf(".");
+      const ext = dot > -1 ? f.name.slice(dot + 1).toUpperCase().slice(0, 4) : "FILE";
+      return { id: id++, name: f.name, ext, size: humanSize(f.size), date: dateStr, status: "Processing" };
+    });
+
+    const ids = newDocs.map((d) => d.id);
+    setNextId(id);
+    setDocuments((prev) => [...newDocs, ...prev]);
+
+    setTimeout(() => {
+      setDocuments((prev) =>
+        prev.map((d) => (ids.includes(d.id) ? { ...d, status: "Indexed" } : d))
+      );
+    }, 1900);
+
+    e.target.value = "";
+  }
+
+  // ── Derived values ────────────────────────────────────────────────────────
+
   const words = assistantFull.split(" ");
   const assistantText = words.slice(0, revealed).join(" ");
   const orgDomain = user.org + ".myco.app";
   const initials = getInitials(user.username);
-  const headerTitle = isConversation ? userQuestion : "New chat";
+  const indexedCount = documents.filter((d) => d.status === "Indexed").length;
 
-  const suggested = Object.entries(CHAT_DATA).map(([key, d]) => ({
-    key,
-    title: d.q,
-    sub: d.sub,
-  }));
+  const suggested = Object.entries(CHAT_DATA).map(([key, d]) => ({ key, title: d.q, sub: d.sub }));
 
   const history = [
     {
@@ -195,6 +296,8 @@ export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
     },
   ];
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div
       data-theme={theme}
@@ -212,21 +315,30 @@ export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
               <div className="text-[14px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
                 {user.org_display_name}
               </div>
-              <div className="text-[11px] text-ink-faint font-mono">
-                {orgDomain}
-              </div>
+              <div className="text-[11px] text-ink-faint font-mono">{orgDomain}</div>
             </div>
           </div>
         </div>
 
-        {/* New chat */}
-        <div className="px-4 pb-3">
+        {/* Nav buttons */}
+        <div className="px-4 pb-3 flex flex-col gap-[6px]">
           <button
             onClick={newChat}
             className="w-full flex items-center gap-[9px] px-3 py-[10px] text-[14px] font-medium font-sans text-ink bg-surface border border-edge rounded-[10px] cursor-pointer transition-colors hover:bg-surface-2 hover:border-edge-strong text-left"
           >
             <PlusIcon />
             New chat
+          </button>
+          <button
+            onClick={() => setView("admin")}
+            className={`w-full flex items-center gap-[9px] px-3 py-[10px] text-[14px] font-sans border border-transparent rounded-[10px] cursor-pointer transition-colors hover:bg-surface-2 text-left ${
+              view === "admin"
+                ? "font-semibold text-accent-text bg-surface-2"
+                : "font-medium text-ink bg-transparent"
+            }`}
+          >
+            <ShieldIcon />
+            Admin
           </button>
         </div>
 
@@ -240,10 +352,7 @@ export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
               {group.items.map((item, i) => (
                 <button
                   key={i}
-                  onClick={() => {
-                    const d = CHAT_DATA[item.key];
-                    ask(d.q, d.a, d.sources);
-                  }}
+                  onClick={() => { const d = CHAT_DATA[item.key]; ask(d.q, d.a, d.sources); }}
                   className={`w-full text-left px-[10px] py-2 my-px rounded-lg text-[13.5px] font-sans border-none cursor-pointer whitespace-nowrap overflow-hidden text-ellipsis transition-colors ${
                     item.active
                       ? "bg-surface-2 text-ink font-semibold"
@@ -279,143 +388,196 @@ export default function ChatPage({ user, onLogout, theme, toggleTheme }) {
         </div>
       </aside>
 
-      {/* ── Main ── */}
-      <main className="flex-1 flex flex-col h-full min-w-0">
-        {/* Header */}
-        <header className="h-[54px] shrink-0 border-b border-edge flex items-center px-6">
-          <div className="text-[14px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
-            {headerTitle}
-          </div>
-        </header>
+      {/* ── Chat view ── */}
+      {view === "chat" && (
+        <main className="flex-1 flex flex-col h-full min-w-0">
+          <header className="h-[54px] shrink-0 border-b border-edge flex items-center px-6">
+            <div className="text-[14px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
+              {isConversation ? userQuestion : "New chat"}
+            </div>
+          </header>
 
-        {/* ── Empty state ── */}
-        {!isConversation && (
-          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6 py-10">
-            <div className="w-full max-w-[680px] flex flex-col items-center">
-              <div className="w-[46px] h-[46px] rounded-xl bg-accent flex items-center justify-center shadow-accent-md mb-5">
-                <div className="w-[17px] h-[17px] bg-white rounded-[4px] rotate-45" />
+          {/* Empty state */}
+          {!isConversation && (
+            <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6 py-10">
+              <div className="w-full max-w-[680px] flex flex-col items-center">
+                <div className="w-[46px] h-[46px] rounded-xl bg-accent flex items-center justify-center shadow-accent-md mb-5">
+                  <div className="w-[17px] h-[17px] bg-white rounded-[4px] rotate-45" />
+                </div>
+                <h2 className="text-[26px] font-semibold tracking-[-0.02em] text-center mb-[6px]">
+                  Good morning, {user.username.split(/[_.\-]/)[0]}
+                </h2>
+                <p className="text-[15px] text-ink-dim text-center mb-8">
+                  Ask anything about your company&#39;s documents and tools.
+                </p>
+                <div className="w-full grid grid-cols-2 gap-3">
+                  {suggested.map((p) => (
+                    <button
+                      key={p.key}
+                      onClick={() => { const d = CHAT_DATA[p.key]; ask(d.q, d.a, d.sources); }}
+                      className="text-left px-4 py-[15px] bg-surface border border-edge rounded-[13px] cursor-pointer flex flex-col gap-[5px] font-sans transition-[border,transform,box-shadow] hover:border-edge-strong hover:shadow-card hover:-translate-y-px"
+                    >
+                      <span className="text-[14.5px] font-medium text-ink leading-[1.35]">{p.title}</span>
+                      <span className="text-[12px] text-ink-faint font-mono">{p.sub}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <h2 className="text-[26px] font-semibold tracking-[-0.02em] text-center mb-[6px]">
-                Good morning, {user.username.split(/[_.\-]/)[0]}
-              </h2>
-              <p className="text-[15px] text-ink-dim text-center mb-8">
-                Ask anything about your company&#39;s documents and tools.
-              </p>
+            </div>
+          )}
 
-              <div className="w-full grid grid-cols-2 gap-3">
-                {suggested.map((p) => (
-                  <button
-                    key={p.key}
-                    onClick={() => {
-                      const d = CHAT_DATA[p.key];
-                      ask(d.q, d.a, d.sources);
-                    }}
-                    className="text-left px-4 py-[15px] bg-surface border border-edge rounded-[13px] cursor-pointer flex flex-col gap-[5px] font-sans transition-[border,transform,box-shadow] hover:border-edge-strong hover:shadow-card hover:-translate-y-px"
+          {/* Conversation */}
+          {isConversation && (
+            <div className="flex-1 overflow-y-auto px-6 py-8">
+              <div className="max-w-[720px] mx-auto flex flex-col gap-7">
+                <div className="flex justify-end">
+                  <div className="max-w-[80%] px-4 py-3 bg-accent-soft text-ink rounded-[16px_16px_4px_16px] text-[15px] leading-relaxed">
+                    {userQuestion}
+                  </div>
+                </div>
+                <div className="flex gap-[13px]">
+                  <div className="w-[30px] h-[30px] rounded-lg bg-accent shrink-0 flex items-center justify-center mt-[2px]">
+                    <div className="w-[11px] h-[11px] bg-white rounded-[3px] rotate-45" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15px] leading-[1.65] text-ink whitespace-pre-wrap">
+                      {assistantText}
+                      {streaming && (
+                        <span className="inline-block w-2 h-4 bg-accent rounded-[2px] align-text-bottom ml-[2px] animate-blink" />
+                      )}
+                    </div>
+                    {streamingDone && sources.length > 0 && (
+                      <div className="mt-5 animate-fade-up">
+                        <div className="flex items-center gap-[7px] mb-[11px]">
+                          <FileIcon />
+                          <span className="text-[12px] font-semibold tracking-[0.03em] uppercase text-ink-faint">
+                            {sources.length} sources
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-[10px]">
+                          {sources.map((s, i) => (
+                            <div key={i} className="px-[13px] py-3 bg-surface border border-edge rounded-[11px] cursor-pointer transition-[border,box-shadow] hover:border-edge-strong hover:shadow-card">
+                              <div className="flex items-center gap-2 mb-[6px]">
+                                <span className="w-[18px] h-[18px] shrink-0 rounded-[5px] bg-accent-soft text-accent-text text-[11px] font-semibold flex items-center justify-center font-mono">
+                                  {i + 1}
+                                </span>
+                                <span className="text-[13px] font-semibold text-ink whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {s.title}
+                                </span>
+                              </div>
+                              <div className="text-[12px] leading-[1.45] text-ink-dim line-clamp-2">{s.snippet}</div>
+                              <div className="mt-2 text-[11px] text-ink-faint font-mono">{s.type}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Composer */}
+          <div className="shrink-0 px-6 pb-[18px] pt-2">
+            <div className="max-w-[720px] mx-auto">
+              <div className="flex items-end gap-[10px] px-4 py-[10px] bg-surface border border-edge rounded-2xl shadow-card transition-[border] focus-within:border-accent">
+                <textarea
+                  ref={textareaRef}
+                  value={composer}
+                  onChange={autoResizeTextarea}
+                  onKeyDown={handleComposerKey}
+                  rows={1}
+                  placeholder="Ask about policies, docs, roadmaps…"
+                  className="flex-1 resize-none border-none outline-none bg-transparent text-ink text-[15px] font-sans leading-relaxed py-[6px] max-h-[140px] placeholder:text-ink-faint"
+                />
+                <button
+                  onClick={sendComposer}
+                  aria-label="Send"
+                  className="w-9 h-9 shrink-0 rounded-[10px] bg-accent border-none text-white flex items-center justify-center cursor-pointer transition-colors hover:bg-accent-hover"
+                >
+                  <UpArrowIcon />
+                </button>
+              </div>
+              <p className="mt-[10px] text-[11.5px] text-center text-ink-faint">
+                Answers are generated from your organization&#39;s connected knowledge base.
+              </p>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* ── Admin view ── */}
+      {view === "admin" && (
+        <main className="flex-1 flex flex-col h-full min-w-0">
+          <header className="h-[54px] shrink-0 border-b border-edge flex items-center justify-between px-6">
+            <div className="text-[14px] font-semibold">Admin · Knowledge base</div>
+            <label className="flex items-center gap-2 px-[14px] py-2 text-[13.5px] font-semibold text-white bg-accent rounded-[9px] cursor-pointer transition-colors hover:bg-accent-hover">
+              <PlusIcon />
+              Upload document
+              <input type="file" multiple onChange={handleUpload} className="hidden" />
+            </label>
+          </header>
+
+          <div className="flex-1 overflow-y-auto px-6 py-[30px]">
+            <div className="max-w-[900px] mx-auto">
+              <div className="mb-[22px]">
+                <h2 className="text-[22px] font-semibold tracking-[-0.02em] mb-1">Documents</h2>
+                <p className="text-[14px] text-ink-dim">
+                  {indexedCount} document{indexedCount !== 1 ? "s" : ""} indexed in your organization&#39;s knowledge base.
+                </p>
+              </div>
+
+              {/* Dropzone */}
+              <label className="flex flex-col items-center gap-[10px] px-6 py-[30px] mb-[26px] bg-surface border-[1.5px] border-dashed border-edge-strong rounded-[14px] cursor-pointer text-center transition-[border,background] hover:border-accent hover:bg-accent-soft group">
+                <div className="w-[42px] h-[42px] rounded-[11px] bg-accent-soft text-accent-text flex items-center justify-center group-hover:bg-white/60">
+                  <UploadIcon />
+                </div>
+                <div className="text-[14.5px] font-semibold text-ink">Drag files here or click to upload</div>
+                <div className="text-[12.5px] text-ink-faint font-mono">PDF · DOCX · MD · TXT — up to 50 MB each</div>
+                <input type="file" multiple onChange={handleUpload} className="hidden" />
+              </label>
+
+              {/* Table */}
+              <div className="bg-surface border border-edge rounded-[14px] overflow-hidden">
+                {/* Header row */}
+                <div className="grid gap-[14px] px-[18px] py-3 border-b border-edge bg-surface-2 text-[11px] font-semibold tracking-[0.04em] uppercase text-ink-faint"
+                  style={{ gridTemplateColumns: "1fr 84px 96px 130px 120px" }}>
+                  <div>Name</div>
+                  <div>Type</div>
+                  <div>Size</div>
+                  <div>Uploaded</div>
+                  <div>Status</div>
+                </div>
+
+                {/* Rows */}
+                {documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="grid gap-[14px] items-center px-[18px] py-[13px] border-b border-edge last:border-b-0 transition-colors hover:bg-surface-2"
+                    style={{ gridTemplateColumns: "1fr 84px 96px 130px 120px" }}
                   >
-                    <span className="text-[14.5px] font-medium text-ink leading-[1.35]">
-                      {p.title}
-                    </span>
-                    <span className="text-[12px] text-ink-faint font-mono">
-                      {p.sub}
-                    </span>
-                  </button>
+                    <div className="flex items-center gap-[11px] min-w-0">
+                      <span className="w-[30px] h-[30px] shrink-0 rounded-[7px] bg-accent-soft text-accent-text flex items-center justify-center text-[9.5px] font-semibold font-mono">
+                        {doc.ext}
+                      </span>
+                      <span className="text-[14px] font-medium text-ink whitespace-nowrap overflow-hidden text-ellipsis">
+                        {doc.name}
+                      </span>
+                    </div>
+                    <div className="text-[13px] text-ink-dim font-mono">{doc.ext}</div>
+                    <div className="text-[13px] text-ink-dim font-mono">{doc.size}</div>
+                    <div className="text-[13px] text-ink-dim">{doc.date}</div>
+                    <div>
+                      <StatusBadge status={doc.status} />
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
           </div>
-        )}
-
-        {/* ── Conversation ── */}
-        {isConversation && (
-          <div className="flex-1 overflow-y-auto px-6 py-8">
-            <div className="max-w-[720px] mx-auto flex flex-col gap-7">
-              {/* User bubble */}
-              <div className="flex justify-end">
-                <div className="max-w-[80%] px-4 py-3 bg-accent-soft text-ink rounded-[16px_16px_4px_16px] text-[15px] leading-relaxed">
-                  {userQuestion}
-                </div>
-              </div>
-
-              {/* Assistant response */}
-              <div className="flex gap-[13px]">
-                <div className="w-[30px] h-[30px] rounded-lg bg-accent shrink-0 flex items-center justify-center mt-[2px]">
-                  <div className="w-[11px] h-[11px] bg-white rounded-[3px] rotate-45" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[15px] leading-[1.65] text-ink whitespace-pre-wrap">
-                    {assistantText}
-                    {streaming && (
-                      <span className="inline-block w-2 h-4 bg-accent rounded-[2px] align-text-bottom ml-[2px] animate-blink" />
-                    )}
-                  </div>
-
-                  {/* Sources */}
-                  {streamingDone && sources.length > 0 && (
-                    <div className="mt-5 animate-fade-up">
-                      <div className="flex items-center gap-[7px] mb-[11px]">
-                        <FileIcon />
-                        <span className="text-[12px] font-semibold tracking-[0.03em] uppercase text-ink-faint">
-                          {sources.length} sources
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-[10px]">
-                        {sources.map((s, i) => (
-                          <div
-                            key={i}
-                            className="px-[13px] py-3 bg-surface border border-edge rounded-[11px] cursor-pointer transition-[border,box-shadow] hover:border-edge-strong hover:shadow-card"
-                          >
-                            <div className="flex items-center gap-2 mb-[6px]">
-                              <span className="w-[18px] h-[18px] shrink-0 rounded-[5px] bg-accent-soft text-accent-text text-[11px] font-semibold flex items-center justify-center font-mono">
-                                {i + 1}
-                              </span>
-                              <span className="text-[13px] font-semibold text-ink whitespace-nowrap overflow-hidden text-ellipsis">
-                                {s.title}
-                              </span>
-                            </div>
-                            <div className="text-[12px] leading-[1.45] text-ink-dim line-clamp-2">
-                              {s.snippet}
-                            </div>
-                            <div className="mt-2 text-[11px] text-ink-faint font-mono">
-                              {s.type}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Composer ── */}
-        <div className="shrink-0 px-6 pb-[18px] pt-2">
-          <div className="max-w-[720px] mx-auto">
-            <div className="flex items-end gap-[10px] px-4 py-[10px] bg-surface border border-edge rounded-2xl shadow-card transition-[border] focus-within:border-accent">
-              <textarea
-                ref={textareaRef}
-                value={composer}
-                onChange={autoResizeTextarea}
-                onKeyDown={handleComposerKey}
-                rows={1}
-                placeholder="Ask about policies, docs, roadmaps…"
-                className="flex-1 resize-none border-none outline-none bg-transparent text-ink text-[15px] font-sans leading-relaxed py-[6px] max-h-[140px] placeholder:text-ink-faint"
-              />
-              <button
-                onClick={sendComposer}
-                aria-label="Send"
-                className="w-9 h-9 shrink-0 rounded-[10px] bg-accent border-none text-white flex items-center justify-center cursor-pointer transition-colors hover:bg-accent-hover"
-              >
-                <UpArrowIcon />
-              </button>
-            </div>
-            <p className="mt-[10px] text-[11.5px] text-center text-ink-faint">
-              Answers are generated from your organization&#39;s connected knowledge base.
-            </p>
-          </div>
-        </div>
-      </main>
+        </main>
+      )}
     </div>
   );
 }
