@@ -1,0 +1,14 @@
+{
+  "projectId": "470dbf7a-f72b-45d9-8e81-747f35f461ef",
+  "shape": "package",
+  "pkg": "multitenant-frontend",
+  "cssEntry": "dist/tailwind.css",
+  "componentSrcMap": {
+    "Button": "src/components/Button.jsx",
+    "InputField": "src/components/InputField.jsx"
+  },
+  "dtsPropsFor": {
+    "Button": "variant?: 'primary' | 'outline'; children?: React.ReactNode; disabled?: boolean; onClick?: React.MouseEventHandler<HTMLButtonElement>; type?: 'button' | 'submit' | 'reset'",
+    "InputField": "label?: string; type?: string; placeholder?: string; value?: string; onChange?: React.ChangeEventHandler<HTMLInputElement>; disabled?: boolean; required?: boolean; name?: string; id?: string"
+  }
+}

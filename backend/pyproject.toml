@@ -1,0 +1,18 @@
+[project]
+name = "multitenant-backend"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.1",
+    "bcrypt>=4.1",
+    "python-jose[cryptography]>=3.3",
+    "python-multipart>=0.0.9",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = []
