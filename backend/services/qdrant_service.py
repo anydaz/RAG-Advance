@@ -1,7 +1,12 @@
 import os
 import uuid
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import (
+    Distance,
+    VectorParams,
+    PointStruct,
+    PayloadSchemaType,
+)
 
 _client = None
 VECTOR_SIZE = 384  # BAAI/bge-small-en-v1.5
@@ -25,12 +30,18 @@ def ensure_collection(collection_name: str) -> None:
             collection_name=collection_name,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
         )
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name="document_id",
+            field_schema=PayloadSchemaType.INTEGER,
+        )
 
 
 def upsert_chunks(
     collection_name: str,
     document_id: int,
     filename: str,
+    r2_key: str,
     chunks: list[str],
     embeddings: list[list[float]],
     page_numbers: list[list[int]],
@@ -44,6 +55,7 @@ def upsert_chunks(
             payload={
                 "document_id": document_id,
                 "filename": filename,
+                "r2_key": r2_key,
                 "chunk_index": i,
                 "text": chunk,
                 "page_numbers": pages,
@@ -58,6 +70,7 @@ def upsert_chunks(
 def delete_document_chunks(collection_name: str, document_id: int) -> None:
     client = _get_client()
     from qdrant_client.models import Filter, FieldCondition, MatchValue
+
     client.delete(
         collection_name=collection_name,
         points_selector=Filter(

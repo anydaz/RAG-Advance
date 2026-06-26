@@ -7,6 +7,7 @@ import anthropic
 from langgraph.graph import StateGraph, END
 
 from services.retrieval_service import hybrid_search, rerank
+from services.r2_service import get_presigned_url
 
 HAIKU_MODEL = "claude-haiku-4-5"
 
@@ -18,7 +19,7 @@ class RAGState(TypedDict):
 
 
 def _retrieve(state: RAGState) -> dict:
-    chunks = hybrid_search(state["org_slug"], state["query"], k=20)
+    chunks = hybrid_search(state["org_slug"], state["query"], k=10)
     return {"chunks": chunks}
 
 
@@ -66,14 +67,21 @@ async def stream_rag_answer(org_slug: str, query: str) -> AsyncIterator[str]:
     )
     user_message = f"Context:\n\n{context}\n\nQuestion: {query}"
 
-    sources = [
-        {
+    url_cache: dict[str, str] = {}
+    sources = []
+    for c in chunks:
+        r2_key = c.get("r2_key")
+        if r2_key and r2_key not in url_cache:
+            try:
+                url_cache[r2_key] = get_presigned_url(r2_key)
+            except Exception:
+                url_cache[r2_key] = None
+        sources.append({
             "filename": c["filename"],
             "page_numbers": c.get("page_numbers", []),
             "chunk_index": c.get("chunk_index", 0),
-        }
-        for c in chunks
-    ]
+            "url": url_cache.get(r2_key),
+        })
 
     yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
 

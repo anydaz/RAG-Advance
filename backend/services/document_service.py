@@ -108,6 +108,7 @@ def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> d
             collection_name=org_slug,
             document_id=doc_row.id,
             filename=filename,
+            r2_key=r2_key,
             chunks=raw_texts,
             embeddings=embeddings,
             page_numbers=page_numbers,

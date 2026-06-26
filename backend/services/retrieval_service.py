@@ -23,6 +23,7 @@ def _payload_to_chunk(point) -> dict:
         "score": getattr(point, "score", 0.0),
         "text": p.get("text", ""),
         "filename": p.get("filename", ""),
+        "r2_key": p.get("r2_key"),
         "chunk_index": p.get("chunk_index", 0),
         "page_numbers": p.get("page_numbers", []),
         "document_id": p.get("document_id"),
@@ -75,7 +76,7 @@ def bm25_search(org_slug: str, query: str, k: int = 20) -> list[dict]:
     return out
 
 
-def hybrid_search(org_slug: str, query: str, k: int = 20) -> list[dict]:
+def hybrid_search(org_slug: str, query: str, k: int = 10) -> list[dict]:
     semantic = semantic_search(org_slug, query, k)
     bm25 = bm25_search(org_slug, query, k)
 
@@ -97,6 +98,9 @@ def hybrid_search(org_slug: str, query: str, k: int = 20) -> list[dict]:
     return [chunks_by_id[cid] for cid in sorted_ids]
 
 
+RERANK_THRESHOLD = float(os.environ.get("RERANK_THRESHOLD", "0.0"))
+
+
 def rerank(query: str, chunks: list[dict], top_k: int = 5) -> list[dict]:
     if not chunks:
         return []
@@ -104,4 +108,7 @@ def rerank(query: str, chunks: list[dict], top_k: int = 5) -> list[dict]:
     pairs = [(query, c["text"]) for c in chunks]
     scores = reranker.predict(pairs)
     ranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
-    return [chunk for chunk, _ in ranked[:top_k]]
+    return [
+        chunk for chunk, score in ranked[:top_k]
+        if score >= RERANK_THRESHOLD
+    ]

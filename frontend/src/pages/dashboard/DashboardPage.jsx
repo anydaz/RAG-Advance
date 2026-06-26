@@ -194,8 +194,8 @@ export default function DashboardPage({ user, onLogout, theme, toggleTheme }) {
                           const pages = s.page_numbers?.length
                             ? `Page${s.page_numbers.length > 1 ? "s" : ""} ${s.page_numbers.join(", ")}`
                             : null;
-                          return (
-                            <div key={i} className="px-[13px] py-3 bg-surface border border-edge rounded-[11px]">
+                          const inner = (
+                            <>
                               <div className="flex items-center gap-2 mb-[6px]">
                                 <span className="w-[18px] h-[18px] shrink-0 rounded-[5px] bg-accent-soft text-accent-text text-[11px] font-semibold flex items-center justify-center font-mono">
                                   {i + 1}
@@ -207,6 +207,22 @@ export default function DashboardPage({ user, onLogout, theme, toggleTheme }) {
                               {pages && (
                                 <div className="mt-1 text-[11px] text-ink-faint font-mono">{pages}</div>
                               )}
+                            </>
+                          );
+                          const cls = "px-[13px] py-3 bg-surface border border-edge rounded-[11px] transition-[border,box-shadow]";
+                          return s.url ? (
+                            <a
+                              key={i}
+                              href={s.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={cls + " block hover:border-edge-strong hover:shadow-card"}
+                            >
+                              {inner}
+                            </a>
+                          ) : (
+                            <div key={i} className={cls}>
+                              {inner}
                             </div>
                           );
                         })}
