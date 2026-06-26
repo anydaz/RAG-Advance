@@ -132,6 +132,28 @@ def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> d
     }
 
 
+def delete_document(document_id: int, db: Session) -> None:
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    try:
+        r2_service._get_client().delete_object(
+            Bucket=os.environ["R2_BUCKET_NAME"],
+            Key=doc.r2_key,
+        )
+    except Exception:
+        pass  # don't block deletion if R2 object is already gone
+
+    try:
+        qdrant_service.delete_document_chunks(doc.org_slug, doc.id)
+    except Exception:
+        pass  # don't block deletion if collection/chunks are already gone
+
+    db.delete(doc)
+    db.commit()
+
+
 def list_documents(org_slug: str, db: Session) -> list[dict]:
     docs = (
         db.query(Document)

@@ -28,3 +28,8 @@ async def upload_document(
 @router.get("/{org_slug}")
 def get_documents(org_slug: str, db: Session = Depends(get_db)):
     return document_service.list_documents(org_slug, db)
+
+
+@router.delete("/{document_id}", status_code=204)
+def delete_document(document_id: int, db: Session = Depends(get_db)):
+    document_service.delete_document(document_id, db)

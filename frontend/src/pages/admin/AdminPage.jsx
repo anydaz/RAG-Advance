@@ -1,13 +1,22 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "../../components/Sidebar.jsx";
-import { uploadDocument, listDocuments } from "../../api.js";
+import { uploadDocument, listDocuments, deleteDocument } from "../../api.js";
 
 const STATUS_MAP = { ready: "Indexed", processing: "Processing", failed: "Failed" };
 
 const PlusIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6M14 11v6" />
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
   </svg>
 );
 
@@ -54,6 +63,22 @@ export default function AdminPage({ user, onLogout, theme, toggleTheme }) {
   const { data: documents = [], isLoading } = useQuery({
     queryKey,
     queryFn: () => listDocuments(user.org),
+  });
+
+  const { mutate: remove, variables: deletingId } = useMutation({
+    mutationFn: (docId) => deleteDocument(docId),
+    onMutate: async (docId) => {
+      await queryClient.cancelQueries({ queryKey });
+      const snapshot = queryClient.getQueryData(queryKey) ?? [];
+      queryClient.setQueryData(queryKey, snapshot.filter((d) => d.id !== docId));
+      return { snapshot };
+    },
+    onError: (_err, _docId, ctx) => {
+      queryClient.setQueryData(queryKey, ctx.snapshot);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
   });
 
   const { mutate: upload } = useMutation({
@@ -165,13 +190,14 @@ export default function AdminPage({ user, onLogout, theme, toggleTheme }) {
                 <>
                   <div
                     className="grid gap-[14px] px-[18px] py-3 border-b border-edge bg-surface-2 text-[11px] font-semibold tracking-[0.04em] uppercase text-ink-faint"
-                    style={{ gridTemplateColumns: "1fr 84px 96px 130px 120px" }}
+                    style={{ gridTemplateColumns: "1fr 84px 96px 130px 120px 36px" }}
                   >
                     <div>Name</div>
                     <div>Type</div>
                     <div>Size</div>
                     <div>Uploaded</div>
                     <div>Status</div>
+                    <div />
                   </div>
 
                   {documents.map((doc) => {
@@ -183,12 +209,13 @@ export default function AdminPage({ user, onLogout, theme, toggleTheme }) {
                     else size = "—";
                     const date = formatDate(new Date(doc.created_at));
                     const status = STATUS_MAP[doc.status] ?? doc.status;
+                    const isDeleting = deletingId === doc.id;
 
                     return (
                       <div
                         key={doc.id}
                         className="grid gap-[14px] items-center px-[18px] py-[13px] border-b border-edge last:border-b-0 transition-colors hover:bg-surface-2"
-                        style={{ gridTemplateColumns: "1fr 84px 96px 130px 120px" }}
+                        style={{ gridTemplateColumns: "1fr 84px 96px 130px 120px 36px" }}
                       >
                         <div className="flex items-center gap-[11px] min-w-0">
                           <span className="w-[30px] h-[30px] shrink-0 rounded-[7px] bg-accent-soft text-accent-text flex items-center justify-center text-[9.5px] font-semibold font-mono">
@@ -213,6 +240,16 @@ export default function AdminPage({ user, onLogout, theme, toggleTheme }) {
                         <div className="text-[13px] text-ink-dim font-mono">{size}</div>
                         <div className="text-[13px] text-ink-dim">{date}</div>
                         <div><StatusBadge status={status} /></div>
+                        <div>
+                          <button
+                            onClick={() => remove(doc.id)}
+                            disabled={isDeleting || doc.id?.toString().startsWith("temp-")}
+                            aria-label="Delete document"
+                            className="w-7 h-7 flex items-center justify-center rounded-[7px] border border-transparent text-ink-faint transition-colors hover:border-edge hover:text-red-500 hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

@@ -46,6 +46,11 @@ export async function listDocuments(orgSlug) {
   return res.json();
 }
 
+export async function deleteDocument(documentId) {
+  const res = await fetch(`${ADMIN}/documents/${documentId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "Delete failed");
+}
+
 /**
  * Streams a chat response from the RAG agent.
  * Calls onEvent({ type: 'sources'|'token'|'done', ... }) for each SSE event.
