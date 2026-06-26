@@ -1,0 +1,66 @@
+import os
+import uuid
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+
+_client = None
+VECTOR_SIZE = 384  # BAAI/bge-small-en-v1.5
+
+
+def _get_client() -> QdrantClient:
+    global _client
+    if _client is None:
+        _client = QdrantClient(
+            url=os.environ.get("QDRANT_URL", "http://localhost:6333"),
+            api_key=os.environ.get("QDRANT_API_KEY"),
+        )
+    return _client
+
+
+def ensure_collection(collection_name: str) -> None:
+    client = _get_client()
+    existing = {c.name for c in client.get_collections().collections}
+    if collection_name not in existing:
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+        )
+
+
+def upsert_chunks(
+    collection_name: str,
+    document_id: int,
+    filename: str,
+    chunks: list[str],
+    embeddings: list[list[float]],
+    page_numbers: list[list[int]],
+) -> int:
+    client = _get_client()
+    ensure_collection(collection_name)
+    points = [
+        PointStruct(
+            id=str(uuid.uuid4()),
+            vector=embedding,
+            payload={
+                "document_id": document_id,
+                "filename": filename,
+                "chunk_index": i,
+                "text": chunk,
+                "page_numbers": pages,
+            },
+        )
+        for i, (chunk, embedding, pages) in enumerate(zip(chunks, embeddings, page_numbers))
+    ]
+    client.upsert(collection_name=collection_name, points=points)
+    return len(points)
+
+
+def delete_document_chunks(collection_name: str, document_id: int) -> None:
+    client = _get_client()
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    client.delete(
+        collection_name=collection_name,
+        points_selector=Filter(
+            must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
+        ),
+    )

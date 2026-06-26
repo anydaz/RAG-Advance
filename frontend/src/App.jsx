@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/login/LoginPage.jsx";
-import ChatPage from "./pages/dashboard/DashboardPage.jsx";
+import DashboardPage from "./pages/dashboard/DashboardPage.jsx";
+import AdminPage from "./pages/admin/AdminPage.jsx";
 import { getMe } from "./api.js";
 
 const TOKEN_KEY = "auth_token";
@@ -33,22 +35,23 @@ export default function App() {
     setUser(null);
   }
 
-  if (token && user) {
+  if (!token || !user) {
     return (
-      <ChatPage
-        user={user}
-        onLogout={handleLogout}
+      <LoginPage
+        onLoginSuccess={handleLoginSuccess}
         theme={theme}
         toggleTheme={toggleTheme}
       />
     );
   }
 
+  const commonProps = { user, onLogout: handleLogout, theme, toggleTheme };
+
   return (
-    <LoginPage
-      onLoginSuccess={handleLoginSuccess}
-      theme={theme}
-      toggleTheme={toggleTheme}
-    />
+    <Routes>
+      <Route path="/" element={<DashboardPage {...commonProps} />} />
+      <Route path="/admin" element={<AdminPage {...commonProps} />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
