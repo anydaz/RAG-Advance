@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from database.migrations.tenant_ops import for_each_tenant, text
 
 
 # revision identifiers, used by Alembic.
@@ -19,31 +20,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    from sqlalchemy import text
-    from database import SessionLocal
-    from database.models import Organization
-
-    db = SessionLocal()
-    orgs = db.query(Organization).all()
-    for org in orgs:
+    def up(slug):
         op.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {org.slug}.users (
+            CREATE TABLE IF NOT EXISTS {slug}.users (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR NOT NULL UNIQUE,
                 hashed_password VARCHAR NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
         """))
-    db.close()
+
+    for_each_tenant(up)
 
 
 def downgrade() -> None:
-    from sqlalchemy import text
-    from database import SessionLocal
-    from database.models import Organization
-
-    db = SessionLocal()
-    orgs = db.query(Organization).all()
-    for org in orgs:
-        op.execute(text(f"DROP TABLE IF EXISTS {org.slug}.users"))
-    db.close()
+    for_each_tenant(lambda slug: op.execute(text(f"DROP TABLE IF EXISTS {slug}.users")))

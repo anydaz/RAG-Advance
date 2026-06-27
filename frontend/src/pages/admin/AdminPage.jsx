@@ -66,7 +66,7 @@ export default function AdminPage({ user, onLogout, theme, toggleTheme }) {
   });
 
   const { mutate: remove, variables: deletingId } = useMutation({
-    mutationFn: (docId) => deleteDocument(docId),
+    mutationFn: (docId) => deleteDocument(user.org, docId),
     onMutate: async (docId) => {
       await queryClient.cancelQueries({ queryKey });
       const snapshot = queryClient.getQueryData(queryKey) ?? [];

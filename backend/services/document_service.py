@@ -11,7 +11,6 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
 
 from database.models import Document
-from repositories import org_repository
 from services import r2_service, qdrant_service
 
 EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
@@ -77,10 +76,6 @@ def _embed(texts: list[str]) -> list[list[float]]:
 
 
 def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> dict:
-    org = org_repository.find_by_slug(org_slug, db)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
     r2_key = f"{org_slug}/{uuid.uuid4()}/{filename}"
 
     doc_row = Document(org_slug=org_slug, filename=filename, r2_key=r2_key, status="processing")

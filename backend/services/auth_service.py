@@ -33,4 +33,5 @@ def get_current_user(token: str, db: Session):
         user = user_repository.find_by_id(int(payload["sub"]), tdb)
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-    return user, org
+        user_data = {"id": user.id, "username": user.username}
+    return user_data, org

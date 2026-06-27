@@ -46,21 +46,21 @@ export async function listDocuments(orgSlug) {
   return res.json();
 }
 
-export async function deleteDocument(documentId) {
-  const res = await fetch(`${ADMIN}/documents/${documentId}`, { method: "DELETE" });
+export async function deleteDocument(orgSlug, documentId) {
+  const res = await fetch(`${ADMIN}/documents/${documentId}?org_slug=${encodeURIComponent(orgSlug)}`, { method: "DELETE" });
   if (!res.ok) throw new Error((await res.json()).detail ?? "Delete failed");
 }
 
 /**
  * Streams a chat response from the RAG agent.
- * Calls onEvent({ type: 'sources'|'token'|'done', ... }) for each SSE event.
+ * Calls onEvent({ type: 'session'|'sources'|'token'|'done', ... }) for each SSE event.
  * Returns when the stream ends.
  */
-export async function sendChat(orgSlug, message, onEvent) {
+export async function sendChat(orgSlug, username, message, sessionId, onEvent) {
   const res = await fetch(`${CHAT}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ org_slug: orgSlug, message }),
+    body: JSON.stringify({ org_slug: orgSlug, username, message, session_id: sessionId ?? null }),
   });
   if (!res.ok) throw new Error((await res.json()).detail ?? "Chat failed");
 
@@ -74,7 +74,7 @@ export async function sendChat(orgSlug, message, onEvent) {
     buffer += decoder.decode(value, { stream: true });
 
     const lines = buffer.split("\n");
-    buffer = lines.pop(); // keep incomplete last line
+    buffer = lines.pop();
 
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue;
@@ -90,4 +90,21 @@ export async function sendChat(orgSlug, message, onEvent) {
       }
     }
   }
+}
+
+export async function listSessions(orgSlug, username) {
+  const res = await fetch(`${CHAT}/sessions?org_slug=${encodeURIComponent(orgSlug)}&username=${encodeURIComponent(username)}`);
+  if (!res.ok) throw new Error((await res.json()).detail ?? "Failed to load sessions");
+  return res.json();
+}
+
+export async function getMessages(orgSlug, sessionId) {
+  const res = await fetch(`${CHAT}/sessions/${sessionId}/messages?org_slug=${encodeURIComponent(orgSlug)}`);
+  if (!res.ok) throw new Error((await res.json()).detail ?? "Failed to load messages");
+  return res.json();
+}
+
+export async function deleteSession(orgSlug, sessionId) {
+  const res = await fetch(`${CHAT}/sessions/${sessionId}?org_slug=${encodeURIComponent(orgSlug)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "Failed to delete session");
 }

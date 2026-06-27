@@ -42,8 +42,8 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 def me(token: str = Depends(_extract_token), db: Session = Depends(get_db)):
     user, org = auth_service.get_current_user(token, db)
     return {
-        "id": user.id,
-        "username": user.username,
+        "id": user["id"],
+        "username": user["username"],
         "org": org.slug,
         "org_display_name": org.display_name,
     }

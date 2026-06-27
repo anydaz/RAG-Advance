@@ -26,11 +26,16 @@ def get_db():
 
 @contextmanager
 def tenant_session(org_slug: str):
-    """Yields a session with search_path pinned to the tenant schema."""
+    """Yields a session with search_path pinned to the tenant schema.
+    Commits on clean exit, rolls back on exception."""
     db = SessionLocal()
     try:
         db.execute(text(f"SET search_path TO {org_slug}, public"))
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
