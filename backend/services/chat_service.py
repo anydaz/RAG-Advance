@@ -28,7 +28,12 @@ async def stream_chat(org_slug: str, message: str, session_id: int) -> AsyncIter
 
     yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
-    async for chunk in stream_rag_answer(org_slug, message):
+    with tenant_session(org_slug) as db:
+        all_messages = chat_repository.list_messages(db, session_id)
+    # Exclude the just-saved user message (last row); pass the rest as history
+    history = all_messages[:-1]
+
+    async for chunk in stream_rag_answer(org_slug, message, history):
         yield chunk
 
         if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":

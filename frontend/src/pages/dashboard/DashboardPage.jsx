@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Sidebar from "../../components/Sidebar.jsx";
 import { sendChat, listSessions, getMessages, deleteSession } from "../../api.js";
 
@@ -335,6 +337,41 @@ export default function DashboardPage({ user, onLogout, theme, toggleTheme }) {
   );
 }
 
+const mdComponents = {
+  p: ({ children }) => <p className="mb-3 last:mb-0 leading-[1.7]">{children}</p>,
+  h1: ({ children }) => <h1 className="text-[18px] font-semibold mt-5 mb-2 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-[16px] font-semibold mt-4 mb-2 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-[15px] font-semibold mt-3 mb-1 first:mt-0">{children}</h3>,
+  ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="leading-[1.65]">{children}</li>,
+  code: ({ inline, children }) =>
+    inline ? (
+      <code className="px-[5px] py-[2px] rounded-[4px] text-[13px] font-mono bg-surface-2 text-accent-text">{children}</code>
+    ) : (
+      <pre className="my-3 px-4 py-3 rounded-[10px] bg-surface-2 overflow-x-auto text-[13px] font-mono leading-relaxed">
+        <code>{children}</code>
+      </pre>
+    ),
+  blockquote: ({ children }) => (
+    <blockquote className="my-3 pl-4 border-l-2 border-accent text-ink-dim italic">{children}</blockquote>
+  ),
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-accent-text underline underline-offset-2 hover:opacity-80">
+      {children}
+    </a>
+  ),
+  strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+  hr: () => <hr className="my-4 border-edge" />,
+  table: ({ children }) => (
+    <div className="my-3 overflow-x-auto rounded-[8px] border border-edge">
+      <table className="w-full text-[13.5px]">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => <th className="px-3 py-2 text-left font-semibold bg-surface-2 border-b border-edge">{children}</th>,
+  td: ({ children }) => <td className="px-3 py-2 border-b border-edge last:border-b-0">{children}</td>,
+};
+
 function AssistantMessage({ content, sources = [], isStreaming = false, showSources = true }) {
   return (
     <div className="flex gap-[13px]">
@@ -342,8 +379,10 @@ function AssistantMessage({ content, sources = [], isStreaming = false, showSour
         <div className="w-[11px] h-[11px] bg-white rounded-[3px] rotate-45" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[15px] leading-[1.65] text-ink whitespace-pre-wrap">
-          {content}
+        <div className="text-[15px] text-ink">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+            {content}
+          </ReactMarkdown>
           {isStreaming && (
             <span className="inline-block w-2 h-4 bg-accent rounded-[2px] align-text-bottom ml-[2px] animate-blink" />
           )}
