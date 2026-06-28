@@ -10,8 +10,8 @@ from controllers.chat_controller import router as chat_router
 
 load_dotenv()
 
-from services.document_service import _get_embed_model
-from services.retrieval_service import _get_reranker
+from services.document_service import get_embed_model, get_sparse_model
+from services.retrieval_service import get_reranker
 
 app = FastAPI(title="Multitenant App")
 
@@ -33,8 +33,9 @@ app.include_router(chat_router)
 
 @app.on_event("startup")
 def _preload_models():
-    _get_embed_model()
-    _get_reranker()
+    get_embed_model()
+    get_sparse_model()
+    get_reranker()
 
 
 @app.get("/")

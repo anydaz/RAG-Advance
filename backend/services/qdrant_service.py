@@ -4,6 +4,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
     VectorParams,
+    SparseVectorParams,
+    SparseIndexParams,
+    SparseVector,
     PointStruct,
     PayloadSchemaType,
 )
@@ -12,7 +15,7 @@ _client = None
 VECTOR_SIZE = 384  # BAAI/bge-small-en-v1.5
 
 
-def _get_client() -> QdrantClient:
+def get_client() -> QdrantClient:
     global _client
     if _client is None:
         _client = QdrantClient(
@@ -23,18 +26,23 @@ def _get_client() -> QdrantClient:
 
 
 def ensure_collection(collection_name: str) -> None:
-    client = _get_client()
+    client = get_client()
     existing = {c.name for c in client.get_collections().collections}
-    if collection_name not in existing:
-        client.create_collection(
-            collection_name=collection_name,
-            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
-        )
-        client.create_payload_index(
-            collection_name=collection_name,
-            field_name="document_id",
-            field_schema=PayloadSchemaType.INTEGER,
-        )
+    if collection_name in existing:
+        return
+
+    client.create_collection(
+        collection_name=collection_name,
+        vectors_config={"dense": VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE)},
+        sparse_vectors_config={
+            "sparse": SparseVectorParams(index=SparseIndexParams(on_disk=False))
+        },
+    )
+    client.create_payload_index(
+        collection_name=collection_name,
+        field_name="document_id",
+        field_schema=PayloadSchemaType.INTEGER,
+    )
 
 
 def upsert_chunks(
@@ -44,14 +52,21 @@ def upsert_chunks(
     r2_key: str,
     chunks: list[str],
     embeddings: list[list[float]],
+    sparse_embeddings: list[dict],
     page_numbers: list[list[int]],
 ) -> int:
-    client = _get_client()
+    client = get_client()
     ensure_collection(collection_name)
     points = [
         PointStruct(
             id=str(uuid.uuid4()),
-            vector=embedding,
+            vector={
+                "dense": embedding,
+                "sparse": SparseVector(
+                    indices=sparse["indices"],
+                    values=sparse["values"],
+                ),
+            },
             payload={
                 "document_id": document_id,
                 "filename": filename,
@@ -61,14 +76,16 @@ def upsert_chunks(
                 "page_numbers": pages,
             },
         )
-        for i, (chunk, embedding, pages) in enumerate(zip(chunks, embeddings, page_numbers))
+        for i, (chunk, embedding, sparse, pages) in enumerate(
+            zip(chunks, embeddings, sparse_embeddings, page_numbers)
+        )
     ]
     client.upsert(collection_name=collection_name, points=points)
     return len(points)
 
 
 def delete_document_chunks(collection_name: str, document_id: int) -> None:
-    client = _get_client()
+    client = get_client()
     from qdrant_client.models import Filter, FieldCondition, MatchValue
 
     client.delete(

@@ -7,6 +7,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import DocumentStream, InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.chunking import HybridChunker
+from fastembed import SparseTextEmbedding
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
 
@@ -14,10 +15,12 @@ from database.models import Document
 from services import r2_service, qdrant_service
 
 EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
+SPARSE_MODEL_NAME = os.environ.get("SPARSE_MODEL", "Qdrant/bm25")
 
 _converter: DocumentConverter | None = None
 _chunker: HybridChunker | None = None
 _embed_model: SentenceTransformer | None = None
+_sparse_model: SparseTextEmbedding | None = None
 
 
 def _get_converter() -> DocumentConverter:
@@ -40,11 +43,18 @@ def _get_chunker() -> HybridChunker:
     return _chunker
 
 
-def _get_embed_model() -> SentenceTransformer:
+def get_embed_model() -> SentenceTransformer:
     global _embed_model
     if _embed_model is None:
         _embed_model = SentenceTransformer(EMBED_MODEL_NAME)
     return _embed_model
+
+
+def get_sparse_model() -> SparseTextEmbedding:
+    global _sparse_model
+    if _sparse_model is None:
+        _sparse_model = SparseTextEmbedding(model_name=SPARSE_MODEL_NAME)
+    return _sparse_model
 
 
 def _convert_pdf(pdf_bytes: bytes, filename: str):
@@ -72,7 +82,15 @@ def _semantic_chunks(doc) -> list[tuple[str, str, list[int]]]:
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
-    return _get_embed_model().encode(texts, normalize_embeddings=True).tolist()
+    return get_embed_model().encode(texts, normalize_embeddings=True).tolist()
+
+
+def _sparse_embed(texts: list[str]) -> list[dict]:
+    model = get_sparse_model()
+    return [
+        {"indices": emb.indices.tolist(), "values": emb.values.tolist()}
+        for emb in model.embed(texts)
+    ]
 
 
 def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> dict:
@@ -98,6 +116,7 @@ def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> d
         page_numbers = [pages for _, _, pages in chunk_triples]
 
         embeddings = _embed(ctx_texts)
+        sparse_embeddings = _sparse_embed(raw_texts)
 
         chunk_count = qdrant_service.upsert_chunks(
             collection_name=org_slug,
@@ -106,6 +125,7 @@ def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> d
             r2_key=r2_key,
             chunks=raw_texts,
             embeddings=embeddings,
+            sparse_embeddings=sparse_embeddings,
             page_numbers=page_numbers,
         )
 
@@ -134,10 +154,7 @@ def delete_document(document_id: int, db: Session) -> None:
         raise HTTPException(status_code=404, detail="Document not found")
 
     try:
-        r2_service._get_client().delete_object(
-            Bucket=os.environ["R2_BUCKET_NAME"],
-            Key=doc.r2_key,
-        )
+        r2_service.delete_pdf(doc.r2_key)
     except Exception:
         pass  # don't block deletion if R2 object is already gone
 
