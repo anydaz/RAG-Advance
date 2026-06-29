@@ -25,7 +25,7 @@ function getInitials(username) {
   return username.slice(0, 2).toUpperCase();
 }
 
-export default function Sidebar({ user, onLogout, theme, toggleTheme, onNewChat, children }) {
+export default function Sidebar({ user, onLogout, theme, toggleTheme, onNewChat, children, isOpen, onClose }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isAdmin = pathname === "/admin";
@@ -34,11 +34,25 @@ export default function Sidebar({ user, onLogout, theme, toggleTheme, onNewChat,
 
   function handleNewChat() {
     if (onNewChat) onNewChat();
+    if (onClose) onClose();
     navigate("/");
   }
 
   return (
-    <aside className="w-[280px] shrink-0 bg-surface border-r border-edge flex flex-col h-full">
+    <>
+      {/* Mobile backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={onClose}
+        />
+      )}
+    <aside className={`
+      fixed inset-y-0 left-0 z-50 w-[280px] shrink-0 bg-surface border-r border-edge flex flex-col h-full
+      transition-transform duration-300 ease-in-out
+      ${isOpen ? "translate-x-0" : "-translate-x-full"}
+      md:relative md:translate-x-0 md:z-auto
+    `}>
       {/* Org header */}
       <div className="px-4 pt-[18px] pb-[14px]">
         <div className="flex items-center gap-[10px] px-[10px] py-2 rounded-[10px] cursor-pointer transition-colors hover:bg-surface-2">
@@ -100,5 +114,6 @@ export default function Sidebar({ user, onLogout, theme, toggleTheme, onNewChat,
         </button>
       </div>
     </aside>
+    </>
   );
 }
