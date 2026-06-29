@@ -11,6 +11,42 @@ CREATE TABLE IF NOT EXISTS users (
     hashed_password VARCHAR NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS documents (
+    id SERIAL PRIMARY KEY,
+    org_slug VARCHAR NOT NULL,
+    filename VARCHAR NOT NULL,
+    r2_key VARCHAR NOT NULL,
+    status VARCHAR NOT NULL DEFAULT 'processing',
+    chunk_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR NOT NULL,
+    title VARCHAR NOT NULL DEFAULT 'New chat',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_sessions_username_idx ON chat_sessions (username);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role VARCHAR NOT NULL,
+    content TEXT NOT NULL,
+    sources TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_messages_session_id_idx ON chat_messages (session_id);
+
+CREATE TABLE IF NOT EXISTS parent_chunks (
+    id SERIAL PRIMARY KEY,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS parent_chunks_document_id_idx ON parent_chunks (document_id);
 """
 
 

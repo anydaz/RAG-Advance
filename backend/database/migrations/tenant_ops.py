@@ -26,15 +26,25 @@ def for_each_tenant(fn):
     """
     Fetches all organisation slugs and calls fn(slug) for each one.
     fn receives the slug string and is expected to call op.execute / op.* directly.
-    """
-    from database import SessionLocal
-    from database.models import Organization
 
-    db = SessionLocal()
-    try:
-        slugs = [org.slug for org in db.query(Organization).all()]
-    finally:
-        db.close()
+    Uses the alembic connection (op.get_bind()) so it shares the same transaction
+    context and always sees DDL committed by earlier migrations.
+    """
+    conn = op.get_bind()
+
+    # Guard: organizations table may not exist on a brand-new database
+    table_exists = conn.execute(text(
+        "SELECT EXISTS ("
+        "  SELECT 1 FROM information_schema.tables"
+        "  WHERE table_schema = 'public' AND table_name = 'organizations'"
+        ")"
+    )).scalar()
+
+    if not table_exists:
+        return
+
+    rows = conn.execute(text("SELECT slug FROM public.organizations"))
+    slugs = [row[0] for row in rows]
 
     for slug in slugs:
         fn(slug)

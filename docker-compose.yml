@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: andy
+      POSTGRES_PASSWORD: "1234"
+      POSTGRES_DB: rag_multitenant
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U andy -d rag_multitenant"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    env_file:
+      - backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
