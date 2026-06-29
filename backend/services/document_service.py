@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from database.models import Document, ParentChunk
 from services import r2_service, qdrant_service
+from config import prefixed
 
 EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 SPARSE_MODEL_NAME = os.environ.get("SPARSE_MODEL", "Qdrant/bm25")
@@ -85,7 +86,6 @@ def _semantic_chunks(doc) -> tuple[list[tuple[str, str, list[int]]], dict[tuple,
             continue
         headings = getattr(chunk.meta, "headings", None) or []
         heading_prefix = " > ".join(headings)
-        print("heading prefix: ", heading_prefix)
         # Prepend heading path so heading keywords are indexed by both dense and sparse.
         raw_text = f"{heading_prefix}\n{chunk.text}" if heading_prefix else chunk.text
         raw_chunks.append((chunk, raw_text, chunker.contextualize(chunk=chunk), _page_numbers(chunk)))
@@ -112,7 +112,7 @@ def _sparse_embed(texts: list[str]) -> list[dict]:
 
 
 def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> dict:
-    r2_key = f"{org_slug}/{uuid.uuid4()}/{filename}"
+    r2_key = f"{prefixed(org_slug)}/{uuid.uuid4()}/{filename}"
 
     doc_row = Document(org_slug=org_slug, filename=filename, r2_key=r2_key, status="processing")
     db.add(doc_row)

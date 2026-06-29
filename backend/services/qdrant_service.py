@@ -1,6 +1,7 @@
 import os
 import uuid
 from qdrant_client import QdrantClient
+from config import prefixed
 from qdrant_client.models import (
     Distance,
     VectorParams,
@@ -56,6 +57,7 @@ def upsert_chunks(
     parent_chunk_ids: list[int],
     page_numbers: list[list[int]],
 ) -> int:
+    collection_name = prefixed(collection_name)
     client = get_client()
     ensure_collection(collection_name)
     points = [
@@ -87,6 +89,7 @@ def upsert_chunks(
 
 
 def delete_document_chunks(collection_name: str, document_id: int) -> None:
+    collection_name = prefixed(collection_name)
     client = get_client()
     from qdrant_client.models import Filter, FieldCondition, MatchValue
 

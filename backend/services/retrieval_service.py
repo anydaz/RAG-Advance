@@ -5,6 +5,7 @@ from sentence_transformers import CrossEncoder
 from qdrant_client.models import SparseVector, Prefetch, Fusion, FusionQuery
 from services.document_service import get_embed_model, get_sparse_model
 from services.qdrant_service import get_client
+from config import prefixed
 
 RERANK_MODEL_NAME = os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base")
 
@@ -44,7 +45,7 @@ def hybrid_search(org_slug: str, query: str, k: int = 10) -> list[dict]:
 
     client = get_client()
     response = client.query_points(
-        collection_name=org_slug,
+        collection_name=prefixed(org_slug),
         prefetch=[
             Prefetch(query=dense_vec, using="dense", limit=k * 2),
             Prefetch(query=sparse_vec, using="sparse", limit=k * 2),

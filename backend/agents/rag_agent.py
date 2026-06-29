@@ -44,20 +44,41 @@ def _build_graph():
 _graph = _build_graph()
 
 
+async def _needs_rewrite(query: str, history_text: str, client: anthropic.AsyncAnthropic) -> bool:
+    result = await client.messages.create(
+        model=HAIKU_MODEL,
+        max_tokens=5,
+        system=(
+            "You decide if a question depends on conversation context to be understood. "
+            "Answer only YES or NO. "
+            "YES = the question uses pronouns or references (it, that, they, this, above, those) that refer to something in the conversation, or is a vague instruction like 'explain more' or 'go on'. "
+            "NO = the question is fully self-contained and makes sense without any prior context."
+        ),
+        messages=[{
+            "role": "user",
+            "content": f"Conversation so far:\n{history_text}\n\nQuestion: {query}",
+        }],
+    )
+    return result.content[0].text.strip().upper().startswith("YES")
+
+
 async def _rewrite_query(query: str, history: list[dict]) -> str:
     recent = history[-4:]
     history_text = "\n".join(
         f"{m['role'].upper()}: {m['content'][:400]}" for m in recent
     )
     client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    if not await _needs_rewrite(query, history_text, client):
+        return query
+
     result = await client.messages.create(
         model=HAIKU_MODEL,
         max_tokens=80,
         system=(
             "You are a query rewriter. "
-            "If the question is a follow-up that references prior conversation (uses words like 'it', 'that', 'they', 'this', 'the above', or is otherwise ambiguous without context), rewrite it into a self-contained search query. "
-            "If the question is already standalone and unrelated to the conversation history, return it exactly as-is. "
-            "Return only the query — no explanation, no punctuation at the end."
+            "Rewrite the follow-up question into a fully self-contained search query using context from the conversation. "
+            "Return only the rewritten query — no explanation, no punctuation at the end."
         ),
         messages=[{
             "role": "user",
@@ -73,7 +94,6 @@ async def _rewrite_query(query: str, history: list[dict]) -> str:
 
 def _fetch_parent_texts(org_slug: str, chunks: list[dict]) -> dict[int, str]:
     parent_ids = {c["parent_chunk_id"] for c in chunks if c.get("parent_chunk_id")}
-    print("parent_ids:", parent_ids)
     if not parent_ids:
         return {}
     with tenant_session(org_slug) as db:
@@ -97,7 +117,8 @@ async def stream_rag_answer(
     history: list[dict] | None = None,
 ) -> AsyncIterator[str]:
     retrieval_query = await _rewrite_query(query, history) if history else query
-
+    print("original query", query)
+    print("rewrite", retrieval_query)
 
     loop = asyncio.get_event_loop()
     state = await loop.run_in_executor(
