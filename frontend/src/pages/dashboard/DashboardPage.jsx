@@ -252,7 +252,7 @@ export default function DashboardPage({ user, onLogout, theme, toggleTheme }) {
               <p className="text-[15px] text-ink-dim text-center mb-8">
                 Ask anything about your company&#39;s documents and tools.
               </p>
-              <div className="w-full grid grid-cols-2 gap-3">
+              {/* <div className="w-full grid grid-cols-2 gap-3">
                 {SUGGESTIONS.map((p, i) => (
                   <button
                     key={i}
@@ -263,7 +263,7 @@ export default function DashboardPage({ user, onLogout, theme, toggleTheme }) {
                     <span className="text-[12px] text-ink-faint font-mono">{p.sub}</span>
                   </button>
                 ))}
-              </div>
+              </div> */}
             </div>
           </div>
         )}
