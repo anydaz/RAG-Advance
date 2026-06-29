@@ -23,6 +23,7 @@ def _payload_to_chunk(point) -> dict:
         "id": str(point.id),
         "score": getattr(point, "score", 0.0),
         "text": p.get("text", ""),
+        "parent_chunk_id": p.get("parent_chunk_id"),
         "filename": p.get("filename", ""),
         "r2_key": p.get("r2_key"),
         "chunk_index": p.get("chunk_index", 0),
@@ -86,4 +87,5 @@ def rerank(query: str, chunks: list[dict], top_k: int = 5) -> list[dict]:
     scores = reranker.predict(pairs)
     ranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
     candidates = [chunk for chunk, _ in ranked[:top_k]]
+    print("candidates:", candidates)
     return _llm_filter(query, candidates)

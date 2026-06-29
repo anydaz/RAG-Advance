@@ -6,6 +6,8 @@ from typing import AsyncIterator, TypedDict
 import anthropic
 from langgraph.graph import StateGraph, END
 
+from database import tenant_session
+from database.models import ParentChunk
 from services.retrieval_service import hybrid_search, rerank
 from services.r2_service import get_presigned_url
 
@@ -52,8 +54,10 @@ async def _rewrite_query(query: str, history: list[dict]) -> str:
         model=HAIKU_MODEL,
         max_tokens=80,
         system=(
-            "You rewrite follow-up questions into standalone search queries. "
-            "Return only the rewritten query — no explanation, no punctuation at the end."
+            "You are a query rewriter. "
+            "If the question is a follow-up that references prior conversation (uses words like 'it', 'that', 'they', 'this', 'the above', or is otherwise ambiguous without context), rewrite it into a self-contained search query. "
+            "If the question is already standalone and unrelated to the conversation history, return it exactly as-is. "
+            "Return only the query — no explanation, no punctuation at the end."
         ),
         messages=[{
             "role": "user",
@@ -67,12 +71,23 @@ async def _rewrite_query(query: str, history: list[dict]) -> str:
     return result.content[0].text.strip()
 
 
-def _build_context(chunks: list[dict]) -> str:
+def _fetch_parent_texts(org_slug: str, chunks: list[dict]) -> dict[int, str]:
+    parent_ids = {c["parent_chunk_id"] for c in chunks if c.get("parent_chunk_id")}
+    print("parent_ids:", parent_ids)
+    if not parent_ids:
+        return {}
+    with tenant_session(org_slug) as db:
+        rows = db.query(ParentChunk).filter(ParentChunk.id.in_(parent_ids)).all()
+        return {row.id: row.text for row in rows}
+
+
+def _build_context(chunks: list[dict], parent_map: dict[int, str]) -> str:
     parts = []
     for i, c in enumerate(chunks, 1):
         pages = ", ".join(str(p) for p in c.get("page_numbers", []))
         page_str = f"page {pages}" if pages else "unknown page"
-        parts.append(f"[{i}] {c['filename']} — {page_str}\n{c['text']}")
+        context_text = parent_map.get(c.get("parent_chunk_id")) or c["text"]
+        parts.append(f"[{i}] {c['filename']} — {page_str}\n{context_text}")
     return "\n\n---\n\n".join(parts)
 
 
@@ -91,11 +106,13 @@ async def stream_rag_answer(
     )
 
     chunks = state["chunks"]
-    context = _build_context(chunks)
+    parent_map = _fetch_parent_texts(org_slug, chunks)
+    context = _build_context(chunks, parent_map)
 
     system = (
         "You are a helpful assistant. Answer the user's question using only the provided context. "
-        "Be concise and accurate. Cite sources by their number [1], [2], etc. "
+        "Be concise and accurate, straight to the point, no need for unnecessary explanation." 
+        "Cite sources by their number [1], [2], etc. "
         "If the context doesn't contain enough information, say so clearly."
     )
 

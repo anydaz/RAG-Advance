@@ -53,6 +53,7 @@ def upsert_chunks(
     chunks: list[str],
     embeddings: list[list[float]],
     sparse_embeddings: list[dict],
+    parent_chunk_ids: list[int],
     page_numbers: list[list[int]],
 ) -> int:
     client = get_client()
@@ -73,11 +74,12 @@ def upsert_chunks(
                 "r2_key": r2_key,
                 "chunk_index": i,
                 "text": chunk,
+                "parent_chunk_id": parent_chunk_id,
                 "page_numbers": pages,
             },
         )
-        for i, (chunk, embedding, sparse, pages) in enumerate(
-            zip(chunks, embeddings, sparse_embeddings, page_numbers)
+        for i, (chunk, embedding, sparse, parent_chunk_id, pages) in enumerate(
+            zip(chunks, embeddings, sparse_embeddings, parent_chunk_ids, page_numbers)
         )
     ]
     client.upsert(collection_name=collection_name, points=points)

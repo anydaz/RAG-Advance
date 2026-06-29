@@ -11,7 +11,7 @@ from fastembed import SparseTextEmbedding
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
 
-from database.models import Document
+from database.models import Document, ParentChunk
 from services import r2_service, qdrant_service
 
 EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
@@ -71,14 +71,32 @@ def _page_numbers(chunk) -> list[int]:
     return sorted(pages)
 
 
-def _semantic_chunks(doc) -> list[tuple[str, str, list[int]]]:
-    """Returns list of (raw_text, contextualized_text, page_numbers) per chunk."""
+def _semantic_chunks(doc) -> tuple[list[tuple[str, str, list[int]]], dict[tuple, list[int]]]:
+    """Returns (chunk_list, groups).
+
+    chunk_list: list of (raw_text, contextualized_text, page_numbers)
+    groups: heading_key -> [child indices] — siblings under the same section heading.
+    """
+    from collections import defaultdict
     chunker = _get_chunker()
-    return [
-        (chunk.text, chunker.contextualize(chunk=chunk), _page_numbers(chunk))
-        for chunk in chunker.chunk(dl_doc=doc)
-        if chunk.text.strip()
-    ]
+    raw_chunks = []
+    for chunk in chunker.chunk(dl_doc=doc):
+        if not chunk.text.strip():
+            continue
+        headings = getattr(chunk.meta, "headings", None) or []
+        heading_prefix = " > ".join(headings)
+        print("heading prefix: ", heading_prefix)
+        # Prepend heading path so heading keywords are indexed by both dense and sparse.
+        raw_text = f"{heading_prefix}\n{chunk.text}" if heading_prefix else chunk.text
+        raw_chunks.append((chunk, raw_text, chunker.contextualize(chunk=chunk), _page_numbers(chunk)))
+
+    groups: dict[tuple, list[int]] = defaultdict(list)
+    for i, (chunk, _, _, _) in enumerate(raw_chunks):
+        headings = tuple(getattr(chunk.meta, "headings", None) or ())
+        key = headings if headings else (i,)
+        groups[key].append(i)
+
+    return [(raw_text, ctx, pages) for _, raw_text, ctx, pages in raw_chunks], groups
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
@@ -110,10 +128,20 @@ def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> d
         if not markdown.strip():
             raise ValueError("PDF contains no extractable text")
 
-        chunk_triples = _semantic_chunks(dl_doc)
-        raw_texts = [text for text, _, _ in chunk_triples]
-        ctx_texts = [ctx for _, ctx, _ in chunk_triples]
-        page_numbers = [pages for _, _, pages in chunk_triples]
+        chunk_list, groups = _semantic_chunks(dl_doc)
+        raw_texts = [t[0] for t in chunk_list]
+        ctx_texts = [t[1] for t in chunk_list]
+        page_numbers = [t[2] for t in chunk_list]
+
+        # Insert one ParentChunk per section; flush to get DB-assigned IDs.
+        parent_chunk_ids: list[int] = [0] * len(raw_texts)
+        for indices in groups.values():
+            parent_text = "\n\n".join(raw_texts[i] for i in indices)
+            parent = ParentChunk(document_id=doc_row.id, text=parent_text)
+            db.add(parent)
+            db.flush()
+            for i in indices:
+                parent_chunk_ids[i] = parent.id
 
         embeddings = _embed(ctx_texts)
         sparse_embeddings = _sparse_embed(raw_texts)
@@ -126,6 +154,7 @@ def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> d
             chunks=raw_texts,
             embeddings=embeddings,
             sparse_embeddings=sparse_embeddings,
+            parent_chunk_ids=parent_chunk_ids,
             page_numbers=page_numbers,
         )
 
@@ -134,6 +163,7 @@ def ingest_pdf(org_slug: str, filename: str, pdf_bytes: bytes, db: Session) -> d
         db.commit()
 
     except Exception as exc:
+        db.query(ParentChunk).filter(ParentChunk.document_id == doc_row.id).delete()
         doc_row.status = "failed"
         db.commit()
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {exc}") from exc

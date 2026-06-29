@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from datetime import datetime, timezone
 from database import Base  # noqa: E402 — Base lives in database/__init__.py
 
@@ -35,6 +35,15 @@ class Document(Base):
     status = Column(String, nullable=False, default="processing")  # processing | ready | failed
     chunk_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ParentChunk(Base):
+    """Section-level text used for parent expansion — lives in the tenant schema."""
+    __tablename__ = "parent_chunks"
+
+    id = Column(Integer, primary_key=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
 
 
 class ChatSession(Base):
