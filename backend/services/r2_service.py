@@ -34,7 +34,7 @@ def delete_pdf(r2_key: str) -> None:
     _get_client().delete_object(Bucket=os.environ["R2_BUCKET_NAME"], Key=r2_key)
 
 
-def get_presigned_url(r2_key: str, expires_in: int = 3600) -> str:
+def get_presigned_url(r2_key: str, expires_in: int = 86400) -> str:
     bucket = os.environ["R2_BUCKET_NAME"]
     return _get_client().generate_presigned_url(
         "get_object",
